@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вхід</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f4; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .login-container { background: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; }
+        h2 { text-align: center; color: #333; }
+        form p { display: flex; flex-direction: column; }
+        form label { margin-bottom: 5px; color: #555; }
+        input[type="text"], input[type="password"] { padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 1em; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; }
+        button:hover { background-color: #0056b3; }
+        .signup-link { text-align: center; margin-top: 1.5em; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h2>Вхід в систему</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit">Увійти</button>
+        </form>
+        <div class="signup-link">
+            Немає акаунту? <a href="{% url 'signup' %}">Зареєструватись</a>
+        </div>
+    </div>
+</body>
+</html>

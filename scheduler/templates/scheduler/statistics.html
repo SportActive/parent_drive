@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Статистика</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f8f9fa; margin: 0; }
+        .container { max-width: 800px; margin: 2em auto; padding: 1em 2em; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1.5em; }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .nav { padding: 1em 2em; background: #fff; border-bottom: 1px solid #ddd; }
+        /* Стилі для форми */
+        .filter-form { background-color: #f2f2f2; padding: 15px; border-radius: 5px; margin-bottom: 2em; display: flex; align-items: center; gap: 15px; }
+        .filter-form input[type="date"] { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .filter-form button { background-color: #007bff; color: white; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="{% url 'schedule' %}">&larr; Повернутися до календаря</a>
+    </div>
+    <div class="container">
+        <h1>Статистика поїздок</h1>
+
+        <form method="get" class="filter-form">
+            <label for="start_date">З:</label>
+            <input type="date" name="start_date" id="start_date" value="{{ start_date|default:'' }}">
+            
+            <label for="end_date">По:</label>
+            <input type="date" name="end_date" id="end_date" value="{{ end_date|default:'' }}">
+            
+            <button type="submit">Фільтрувати</button>
+        </form>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Батько/Мати</th>
+                    <th>Кількість чергувань</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for parent in parent_stats %}
+                    <tr>
+                        <td>{{ parent.user.get_full_name|default:parent.user.username }}</td>
+                        <td>{{ parent.drive_count }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="2">Дані відсутні.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мій кабінет</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f8f9fa; margin: 0; }
+        .container { max-width: 900px; margin: 2em auto; padding: 1em 2em; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1, .legend, h2 { color: #333; }
+        .nav { padding: 1em 2em; background: #fff; border-bottom: 1px solid #ddd; }
+        #my-calendar { margin-top: 2em; }
+        .my-unavailability, .my-drive { cursor: pointer !important; }
+        .my-unavailability { background-color: #dc3545 !important; border-color: #dc3545 !important; }
+        .other-unavailability { background-color: #6c757d !important; border-color: #6c757d !important; opacity: 0.7; }
+        .my-drive { background-color: #28a745 !important; border-color: #28a745 !important; }
+        .other-drive { background-color: #007bff !important; border-color: #007bff !important; }
+        .legend span { display: inline-block; width: 15px; height: 15px; margin-right: 5px; vertical-align: middle; }
+        .admin-actions { margin-top: 2em; padding-top: 1.5em; border-top: 1px solid #eee; }
+        .recalculate-btn { background-color: #17a2b8; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .recalculate-btn:hover { background-color: #138496; }
+    </style>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+</head>
+<body>
+    <div class="nav">
+        <a href="{% url 'schedule' %}">&larr; Повернутися до календаря</a>
+        
+        {% if user.is_staff %}
+            <a href="{% url 'statistics' %}" style="margin-left: 20px;"><strong>Статистика</strong></a>
+            <a href="{% url 'manage_users' %}" style="margin-left: 20px;"><strong>Керування користувачами</strong></a>
+        {% endif %}
+    </div>
+    <div class="container">
+        <h1>Мій графік</h1>
+        <p>Клікніть на порожній день, щоб змінити статус. Клікніть на свою подію, щоб керувати нею.</p>
+        <div class="legend">
+             <span style="background-color: #28a745;"></span> Моє чергування &nbsp;
+             <span style="background-color: #007bff;"></span> Чуже чергування &nbsp;
+             <span style="background-color: #dc3545;"></span> Моя недоступність &nbsp;
+             <span style="background-color: #6c757d;"></span> Чужа недоступність
+        </div>
+        <div id='my-calendar'></div>
+        {% if user.is_staff %}
+        <div class="admin-actions">
+            <h2>Дії Адміністратора</h2>
+            <p>Ця дія видалить усі чергування, що починаються через 7 днів від сьогодні, і згенерує новий, справедливий графік до кінця навчального року.</p>
+            <button id="recalculate-btn" class="recalculate-btn">Перерахувати майбутній розклад</button>
+        </div>
+        {% endif %}
+    </div>
+    <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('my-calendar');
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'uk',
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth' },
+                events: "{% url 'unavailability_events' %}",
+                dateClick: function(info) {
+                    fetch("{% url 'update_unavailability' %}", {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
+                        body: JSON.stringify({ start_date: info.dateStr })
+                    })
+                    .then(() => calendar.refetchEvents());
+                },
+                eventClick: function(info) {
+                    const eventId = info.event.id;
+                    const isMine = info.event.extendedProps.is_mine;
+                    if (!isMine) { return; }
+                    if (eventId.startsWith('unavail_')) {
+                        if (confirm("Зробити цей день знову доступним?")) {
+                             fetch("{% url 'update_unavailability' %}", {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
+                                body: JSON.stringify({ start_date: info.event.startStr })
+                            })
+                            .then(() => calendar.refetchEvents());
+                        }
+                    }
+                    else if (eventId.startsWith('drive_')) {
+                        if (confirm("Ви хочете виставити це чергування на заміну?")) {
+                            const driveId = eventId.replace('drive_', '');
+                            fetch(`/swap/${driveId}/`, {
+                                method: 'POST',
+                                headers: { 'X-CSRFToken': csrftoken }
+                            }).then(() => calendar.refetchEvents());
+                        }
+                    }
+                }
+            });
+            calendar.render();
+
+            const recalcBtn = document.getElementById('recalculate-btn');
+            if (recalcBtn) {
+                recalcBtn.addEventListener('click', function() {
+                    if (confirm('Ви впевнені? Це видалить та перестворить весь майбутній розклад (починаючи через 7 днів). Цю дію не можна буде скасувати.')) {
+                        fetch("{% url 'recalculate_schedule' %}", {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': csrftoken }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === 'ok') {
+                                alert(data.message);
+                                calendar.refetchEvents();
+                            } else {
+                                alert('Сталася помилка: ' + data.message);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
