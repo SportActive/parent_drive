@@ -9,13 +9,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-for-local
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ['true', '1', 'yes']
 
 # ALLOWED_HOSTS - налаштовуємо один раз
-ALLOWED_HOSTS = [
-    'parentdrive.up.railway.app',
-    'localhost',
-    '127.0.0.1',
-    '.railway.app',
-    '.up.railway.app'
-]
+# ALLOWED_HOSTS = ['parentdrive.up.railway.app', 'localhost', '127.0.0.1', '.railway.app', '.up.railway.app']
 
 # Додати домени з Railway змінних середовища
 railway_public = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
@@ -27,7 +21,7 @@ if railway_private:
     ALLOWED_HOSTS.append(railway_private)
 
 # Для тестування можете тимчасово розкоментувати наступний рядок:
-# ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'scheduler.apps.SchedulerConfig',
