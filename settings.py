@@ -9,7 +9,11 @@ DEBUG = os.environ.get('DJANGO_DEBUG', '') != 'False'
 
 # --- ВИПРАВЛЕННЯ ТУТ ---
 # Додаємо ваш домен Railway до списку дозволених
-ALLOWED_HOSTS = ['parentdrive.up.railway.app', '.railway.app', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = [
+    'parentdrive.up.railway.app',
+    'localhost',
+    '127.0.0.1',
+]
 
 INSTALLED_APPS = [
     'scheduler.apps.SchedulerConfig',
