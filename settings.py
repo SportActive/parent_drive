@@ -1,12 +1,13 @@
+# === TEST DEPLOY ERROR ===
+# Якщо потрібно навмисно зупинити деплой, розкоментуй рядок нижче:
 raise Exception("TEST DEPLOY ERROR")
-
-THIS_IS_A_DELIBERATE_ERROR_TO_TEST_THE_DEPLOYMENT
 
 print("=== SETTINGS.PY IS LOADING ===")
 print(f"Settings file path: {__file__}")
 
 from pathlib import Path
 import os
+import logging
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -15,10 +16,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-for-local
 # Налаштування DEBUG - одне значення
 DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ['true', '1', 'yes']
 
-# ALLOWED_HOSTS - налаштовуємо один раз
-# ALLOWED_HOSTS = ['parentdrive.up.railway.app', 'localhost', '127.0.0.1', '.railway.app', '.up.railway.app']
+# Початкове значення ALLOWED_HOSTS — дозволяємо всі (для Railway тестів)
+ALLOWED_HOSTS = ['*']
 
-# Додати домени з Railway змінних середовища
+# Додати домени з Railway змінних середовища (вони додадуться, навіть якщо є '*')
 railway_public = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
 railway_private = os.environ.get('RAILWAY_PRIVATE_DOMAIN')
 
@@ -26,9 +27,6 @@ if railway_public:
     ALLOWED_HOSTS.append(railway_public)
 if railway_private:
     ALLOWED_HOSTS.append(railway_private)
-
-# Для тестування можете тимчасово розкоментувати наступний рядок:
-ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'scheduler.apps.SchedulerConfig',
@@ -58,13 +56,13 @@ TEMPLATES = [
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
-        'OPTIONS': { 
-            'context_processors': [ 
-                'django.template.context_processors.debug', 
-                'django.template.context_processors.request', 
-                'django.contrib.auth.context_processors.auth', 
-                'django.contrib.messages.context_processors.messages', 
-            ], 
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
         },
     },
 ]
@@ -95,9 +93,8 @@ LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/accounts/login/'
 LOGOUT_REDIRECT_URL = '/'
 
-# Додати для відладки
-import logging
+# Логування для відладки
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.info(f"ALLOWED_HOSTS: {ALLOWED_HOSTS}")
+logger.info(f"FINAL ALLOWED_HOSTS: {ALLOWED_HOSTS}")
 logger.info(f"DEBUG: {DEBUG}")
