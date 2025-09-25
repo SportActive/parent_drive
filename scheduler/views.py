@@ -12,36 +12,31 @@ import datetime
 import json
 
 def signup_view(request):
-    # Перевіряємо, чи є вже користувачі в системі
-    if User.objects.exists() and not request.user.is_staff:
-        # Якщо користувачі вже є, а поточний не адмін - реєстрація закрита
-        # Це можна змінити, якщо потрібна відкрита реєстрація
-        return redirect('login')
-
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
             
-            # --- ЛОГІКА "ПЕРШИЙ - АДМІН" ---
-            # Перевіряємо, чи це єдиний користувач в базі
+            # --- "FIRST USER IS ADMIN" LOGIC ---
+            # Check if this is the only user in the database
             if User.objects.count() == 1:
                 user.is_staff = True
                 user.is_superuser = True
                 user.save()
-            # ---------------------------------
+            # ------------------------------------
 
             ParentProfile.objects.create(user=user)
             login(request, user)
             return redirect('schedule')
     else:
+        # Prevent registration if users already exist and the current user is not an admin
+        if User.objects.exists() and not request.user.is_staff:
+             return redirect('login')
         form = UserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
 
 def schedule_view(request):
-    context = {
-        'is_admin': request.user.is_staff
-    }
+    context = { 'is_admin': request.user.is_staff }
     return render(request, 'scheduler/schedule.html', context)
 
 def schedule_events(request):
