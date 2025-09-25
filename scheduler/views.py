@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from .models import DrivingSlot, ParentProfile, Unavailability, Holiday
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
@@ -8,6 +8,7 @@ from django.db.models import Count, Q
 from django.urls import reverse
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import login
+from django.conf import settings
 import datetime
 import json
 
@@ -16,20 +17,14 @@ def signup_view(request):
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
-            
-            # --- "FIRST USER IS ADMIN" LOGIC ---
-            # Check if this is the only user in the database
             if User.objects.count() == 1:
                 user.is_staff = True
                 user.is_superuser = True
                 user.save()
-            # ------------------------------------
-
             ParentProfile.objects.create(user=user)
             login(request, user)
             return redirect('schedule')
     else:
-        # Prevent registration if users already exist and the current user is not an admin
         if User.objects.exists() and not request.user.is_staff:
              return redirect('login')
         form = UserCreationForm()
@@ -230,3 +225,20 @@ def demote_from_admin(request, user_id):
         except User.DoesNotExist:
             pass
     return redirect('manage_users')
+
+@staff_member_required
+def debug_settings_view(request):
+    """
+    This function reads the settings.py file on the server and displays its content.
+    Accessible only to superusers.
+    """
+    try:
+        # Construct the path to the settings.py file
+        settings_path = settings.BASE_DIR / 'parent_drive' / 'settings.py'
+        with open(settings_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        # Return the content as plain text
+        return HttpResponse(content, content_type='text/plain; charset=utf-8')
+    except Exception as e:
+        return HttpResponse(f"Could not read settings.py file: {e}", status=500)

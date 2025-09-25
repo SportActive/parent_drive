@@ -21,4 +21,7 @@ urlpatterns = [
     path('manage-users/', views.manage_users_view, name='manage_users'),
     path('promote/<int:user_id>/', views.promote_to_admin, name='promote_to_admin'),
     path('demote/<int:user_id>/', views.demote_from_admin, name='demote_from_admin'),
+    # --- ADD THIS NEW URL ---
+    path('debug-settings/', views.debug_settings_view, name='debug_settings'),
 ]
+
