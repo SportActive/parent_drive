@@ -1,3 +1,5 @@
+THIS_IS_A_DELIBERATE_ERROR_TO_TEST_THE_DEPLOYMENT
+
 print("=== SETTINGS.PY IS LOADING ===")
 print(f"Settings file path: {__file__}")
 
