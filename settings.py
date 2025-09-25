@@ -8,12 +8,36 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-for-local
 DEBUG = os.environ.get('DJANGO_DEBUG', '') != 'False'
 
 # --- ВИПРАВЛЕННЯ ТУТ ---
-# Додаємо ваш домен Railway до списку дозволених
+
+# Отримати домен з Railway
+RAILWAY_PUBLIC_DOMAIN = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+RAILWAY_PRIVATE_DOMAIN = os.environ.get('RAILWAY_PRIVATE_DOMAIN')
+
 ALLOWED_HOSTS = [
     'parentdrive.up.railway.app',
     'localhost',
     '127.0.0.1',
 ]
+
+# Додати домени Railway якщо вони існують
+if RAILWAY_PUBLIC_DOMAIN:
+    ALLOWED_HOSTS.append(RAILWAY_PUBLIC_DOMAIN)
+if RAILWAY_PRIVATE_DOMAIN:
+    ALLOWED_HOSTS.append(RAILWAY_PRIVATE_DOMAIN)
+
+# Для Railway також додайте:
+if 'RAILWAY_ENVIRONMENT' in os.environ:
+    ALLOWED_HOSTS.append('.railway.app')
+    ALLOWED_HOSTS.append('.up.railway.app')
+
+# Якщо є змінна середовища RAILWAY_PUBLIC_DOMAIN
+if os.environ.get('RAILWAY_PUBLIC_DOMAIN'):
+    ALLOWED_HOSTS.append(os.environ.get('RAILWAY_PUBLIC_DOMAIN'))
+
+# Для відладки - тимчасово можете спробувати:
+ALLOWED_HOSTS = ['*']
+
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 INSTALLED_APPS = [
     'scheduler.apps.SchedulerConfig',
