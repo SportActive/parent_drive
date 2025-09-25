@@ -1,3 +1,6 @@
+print("=== SETTINGS.PY IS LOADING ===")
+print(f"Settings file path: {__file__}")
+
 from pathlib import Path
 import os
 
