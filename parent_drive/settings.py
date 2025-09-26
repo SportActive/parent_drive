@@ -1,19 +1,17 @@
 from pathlib import Path
 import os
+import dj_database_url # <-- Додайте цей новий імпорт
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-for-local-dev')
-
 DEBUG = os.environ.get('DJANGO_DEBUG', '') != 'False'
 
 ALLOWED_HOSTS = []
 RAILWAY_HOSTNAME = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
 if RAILWAY_HOSTNAME:
     ALLOWED_HOSTS.append(RAILWAY_HOSTNAME)
-    ALLOWED_HOSTS.append('.' + RAILWAY_HOSTNAME)
 
-if not RAILWAY_HOSTNAME:
+if not DEBUG:
     ALLOWED_HOSTS.extend(['localhost', '127.0.0.1'])
 
 USE_X_FORWARDED_HOST = True
@@ -53,29 +51,25 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'parent_drive.wsgi.application'
 
+# --- ВИПРАВЛЕННЯ ТУТ ---
+# Цей код автоматично налаштовує базу даних зі змінної DATABASE_URL,
+# яку надає Railway, але повертається до SQLite для локальної розробки.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600
+    )
 }
 
 AUTH_PASSWORD_VALIDATORS = []
-
 LANGUAGE_CODE = 'uk'
-
-# --- ЗМІНА ТУТ ---
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
 USE_TZ = True
-
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
 LOGIN_REDIRECT_URL = '/'
 LOGIN_URL = '/accounts/login/'
 LOGOUT_REDIRECT_URL = '/'
