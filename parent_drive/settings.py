@@ -1,4 +1,8 @@
+# Test change to verify git
 from pathlib import Path
+# ... rest of the file
+
+# from pathlib import Path
 import os
 import dj_database_url # <-- Додайте цей новий імпорт
 
