@@ -3,18 +3,21 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-for-local-dev')
+SECRET_KEY = os.environ.get('SECRET_KEY')
 
+# DEBUG вимикається автоматично, якщо на Railway не створено змінну DJANGO_DEBUG
 DEBUG = os.environ.get('DJANGO_DEBUG', '') != 'False'
 
-ALLOWED_HOSTS = ['parentdrive.up.railway.app', '.railway.app', 'localhost', '127.0.0.1']
+# Надійний спосіб визначення дозволених хостів для Railway
+ALLOWED_HOSTS = []
+RAILWAY_HOSTNAME = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+if RAILWAY_HOSTNAME:
+    ALLOWED_HOSTS.append(RAILWAY_HOSTNAME)
+    ALLOWED_HOSTS.append('.' + RAILWAY_HOSTNAME) # Дозволяємо і піддомени
 
-
-# --- НОВІ НАЛАШТУВАННЯ ДЛЯ РОБОТИ ЗА ПРОКСІ ---
-# Ці рядки кажуть Django довіряти заголовкам, які надсилає Railway
-USE_X_FORWARDED_HOST = True
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-# ----------------------------------------------
+# Для локальної розробки (якщо запускаєте на своєму комп'ютері)
+if not RAILWAY_HOSTNAME:
+    ALLOWED_HOSTS.extend(['localhost', '127.0.0.1'])
 
 
 INSTALLED_APPS = [
@@ -61,7 +64,7 @@ DATABASES = {
 AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = 'uk'
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Europe/Kiev'
 USE_I18N = True
 USE_TZ = True
 

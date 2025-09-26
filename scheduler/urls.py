@@ -2,13 +2,8 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # Main page is at the root URL
-    path('', views.schedule_view, name='schedule'),
-    
-    # Signup is at /signup/
     path('signup/', views.signup_view, name='signup'),
-    
-    # All other app URLs
+    path('', views.schedule_view, name='schedule'),
     path('events/', views.schedule_events, name='schedule_events'),
     path('toggle-holiday/', views.toggle_holiday, name='toggle_holiday'),
     path('my-schedule/', views.my_schedule_view, name='my_schedule'),
