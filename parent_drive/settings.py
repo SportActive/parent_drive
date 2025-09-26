@@ -52,10 +52,16 @@ TEMPLATES = [
 WSGI_APPLICATION = 'parent_drive.wsgi.application'
 
 # --- ВИПРАВЛЕННЯ ТУТ ---
-# Ми прибираємо 'default', щоб змусити Django використовувати DATABASE_URL
+# DATABASES = {
+#     'default': dj_database_url.parse('postgresql://postgres:gbThqFnCdAydFzFrAUUpPxPwTAOeVihP@trolley.proxy.rlwy.net:36091/railway')
+# }
 DATABASES = {
-    'default': dj_database_url.config(conn_max_age=600)
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600
+    )
 }
+
 
 AUTH_PASSWORD_VALIDATORS = []
 LANGUAGE_CODE = 'uk'
