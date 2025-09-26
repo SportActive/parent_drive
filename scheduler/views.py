@@ -16,7 +16,6 @@ def signup_view(request):
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
-            # "Перший - адмін"
             if User.objects.count() == 1:
                 user.is_staff = True
                 user.is_superuser = True
@@ -25,7 +24,8 @@ def signup_view(request):
             login(request, user)
             return redirect('schedule')
     else:
-        # Ми прибрали звідси перевірку, яка блокувала реєстрацію
+        if User.objects.exists() and not request.user.is_staff:
+             return redirect('login')
         form = UserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
 
@@ -37,7 +37,7 @@ def schedule_events(request):
     events = []
     holidays = Holiday.objects.all()
     for holiday in holidays:
-        events.append({ 'title': holiday.name, 'start': holiday.date.strftime('%Y-%m-%d'), 'display': 'background', 'color': '#ff9f89' })
+        events.append({ 'id': f"holiday_{holiday.id}", 'title': holiday.name, 'start': holiday.date.strftime('%Y-%m-%d'), 'allDay': True, 'className': 'holiday-event' })
     slots = DrivingSlot.objects.all()
     for slot in slots:
         is_mine = False
@@ -114,33 +114,11 @@ def update_unavailability(request):
                 return JsonResponse({'status': 'deleted'})
             else:
                 new_event = Unavailability.objects.create(parent=parent_profile, start_date=start_date, end_date=start_date, reason='Зайнятий')
-                if (new_event.start_date - datetime.date.today()).days < 7:
-                    conflicting_drives = DrivingSlot.objects.filter(driver=parent_profile, date=new_event.start_date, is_swap_requested=False)
-                    for drive in conflicting_drives:
-                        drive.is_swap_requested = True
-                        drive.save()
-                    return JsonResponse({'status': 'created_swap_requested'})
-                else:
-                    start_recalc_date = new_event.start_date
-                    today = datetime.date.today()
-                    end_year = today.year
-                    if today.month >= 9:
-                        end_year += 1
-                    end_recalc_date = datetime.date(end_year, 9, 1)
-                    DrivingSlot.objects.filter(date__gte=start_recalc_date).delete()
-                    all_parents = list(ParentProfile.objects.all())
-                    holidays = set(Holiday.objects.values_list('date', flat=True))
-                    current_date = start_recalc_date
-                    while current_date < end_recalc_date:
-                        if current_date.weekday() == 4 and current_date not in holidays:
-                            unavailable_parents = Unavailability.objects.filter(start_date__lte=current_date, end_date__gte=current_date).values_list('parent_id', flat=True)
-                            available_parents = [p for p in all_parents if p.id not in unavailable_parents]
-                            if available_parents:
-                                parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))).order_by('drive_count')
-                                fairest_driver = parent_counts[0]
-                                DrivingSlot.objects.create(date=current_date, driver=fairest_driver)
-                        current_date += datetime.timedelta(days=1)
-                    return JsonResponse({'status': 'created_recalculated'})
+                conflicting_drives = DrivingSlot.objects.filter(driver=parent_profile, date__gte=new_event.start_date, date__lte=new_event.end_date, is_swap_requested=False)
+                for drive in conflicting_drives:
+                    drive.is_swap_requested = True
+                    drive.save()
+                return JsonResponse({'status': 'created'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error'}, status=400)
@@ -199,7 +177,9 @@ def recalculate_schedule_view(request):
             end_year += 1
         end_recalculation_date = datetime.date(end_year, 9, 1)
         DrivingSlot.objects.filter(date__gte=start_recalculation_date).delete()
-        all_parents = list(ParentProfile.objects.all())
+        
+        all_parents = list(ParentProfile.objects.filter(is_driver=True))
+        
         holidays = set(Holiday.objects.values_list('date', flat=True))
         slots_created = 0
         current_date = start_recalculation_date
@@ -208,7 +188,9 @@ def recalculate_schedule_view(request):
                 unavailable_parents = Unavailability.objects.filter(start_date__lte=current_date, end_date__gte=current_date).values_list('parent_id', flat=True)
                 available_parents = [p for p in all_parents if p.id not in unavailable_parents]
                 if available_parents:
-                    parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))).order_by('drive_count')
+                    parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(
+                        drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))
+                    ).order_by('drive_count')
                     fairest_driver = parent_counts[0]
                     DrivingSlot.objects.create(date=current_date, driver=fairest_driver)
                     slots_created += 1

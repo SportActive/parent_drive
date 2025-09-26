@@ -4,6 +4,8 @@ from django.contrib.auth.models import User
 class ParentProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     phone_number = models.CharField(max_length=20, blank=True, null=True)
+    is_driver = models.BooleanField(default=True, help_text="Чи бере участь цей користувач у чергуванні?")
+
     def __str__(self):
         return self.user.get_full_name() or self.user.username
 

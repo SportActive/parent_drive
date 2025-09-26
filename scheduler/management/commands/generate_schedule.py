@@ -23,10 +23,11 @@ class Command(BaseCommand):
         start_of_month = datetime.date(target_year, target_month, 1)
         num_days = monthrange(target_year, target_month)[1]
         holidays_in_month = set(Holiday.objects.filter(date__year=target_year, date__month=target_month).values_list('date', flat=True))
-        all_parents = list(ParentProfile.objects.all())
+        
+        all_parents = list(ParentProfile.objects.filter(is_driver=True))
 
         if not all_parents:
-            self.stdout.write(self.style.ERROR('Не знайдено батьків у базі даних.'))
+            self.stdout.write(self.style.ERROR('Не знайдено батьків-водіїв у базі даних.'))
             return
 
         self.stdout.write(f"Оновлення розкладу для {start_of_month.strftime('%B %Y')}...")

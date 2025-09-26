@@ -25,7 +25,6 @@
 <body>
     <div class="nav">
         <a href="{% url 'schedule' %}">&larr; Повернутися до календаря</a>
-        
         {% if user.is_staff %}
             <a href="{% url 'statistics' %}" style="margin-left: 20px;"><strong>Статистика</strong></a>
             <a href="{% url 'manage_users' %}" style="margin-left: 20px;"><strong>Керування користувачами</strong></a>
@@ -69,6 +68,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('my-calendar');
             var calendar = new FullCalendar.Calendar(calendarEl, {
+                height: 'auto', // Автоматична висота
                 initialView: 'dayGridMonth',
                 locale: 'uk',
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth' },
