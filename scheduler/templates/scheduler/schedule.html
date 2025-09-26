@@ -8,11 +8,12 @@
         body { font-family: sans-serif; margin: 0; }
         #calendar { max-width: 900px; margin: 20px auto; }
         .user-nav { background-color: #f8f9fa; padding: 10px 20px; text-align: right; border-bottom: 1px solid #ddd; }
-        .my-drive-event, .swap-request-event, .other-drive-event, .unassigned-event { cursor: pointer; }
+        .my-drive-event, .swap-request-event, .other-drive-event, .unassigned-event, .holiday-event { cursor: pointer; }
         .my-drive-event { background-color: #28a745; border-color: #28a745; }
         .other-drive-event { background-color: #007bff; border-color: #007bff; }
         .unassigned-event { background-color: #ffc107; border-color: #ffc107; color: black; }
         .swap-request-event { background-color: #6c757d; border-color: #6c757d; }
+        .holiday-event { background-color: #fd7e14; border-color: #fd7e14; } 
     </style>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
   </head>
@@ -70,6 +71,19 @@
                 
                 eventClick: function(info) {
                     const props = info.event.extendedProps;
+                    const eventId = info.event.id;
+
+                    if (isAdmin && eventId.startsWith('holiday_')) {
+                        if (confirm(`Зробити ${info.event.startStr} знову робочим днем?`)) {
+                             fetch("{% url 'toggle_holiday' %}", {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
+                                body: JSON.stringify({ date: info.event.startStr })
+                            })
+                            .then(() => calendar.refetchEvents());
+                        }
+                        return;
+                    }
                     
                     if (isAdmin) {
                         if (confirm("Ви увійшли як адміністратор. Перейти на сторінку редагування цього чергування?")) {
