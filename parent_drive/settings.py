@@ -3,22 +3,21 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get('SECRET_KEY')
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-for-local-dev')
 
-# DEBUG вимикається автоматично, якщо на Railway не створено змінну DJANGO_DEBUG
 DEBUG = os.environ.get('DJANGO_DEBUG', '') != 'False'
 
-# Надійний спосіб визначення дозволених хостів для Railway
 ALLOWED_HOSTS = []
 RAILWAY_HOSTNAME = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
 if RAILWAY_HOSTNAME:
     ALLOWED_HOSTS.append(RAILWAY_HOSTNAME)
-    ALLOWED_HOSTS.append('.' + RAILWAY_HOSTNAME) # Дозволяємо і піддомени
+    ALLOWED_HOSTS.append('.' + RAILWAY_HOSTNAME)
 
-# Для локальної розробки (якщо запускаєте на своєму комп'ютері)
 if not RAILWAY_HOSTNAME:
     ALLOWED_HOSTS.extend(['localhost', '127.0.0.1'])
 
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 INSTALLED_APPS = [
     'scheduler.apps.SchedulerConfig',
@@ -64,7 +63,10 @@ DATABASES = {
 AUTH_PASSWORD_VALIDATORS = []
 
 LANGUAGE_CODE = 'uk'
-TIME_ZONE = 'Europe/Kiev'
+
+# --- ЗМІНА ТУТ ---
+TIME_ZONE = 'UTC'
+
 USE_I18N = True
 USE_TZ = True
 
