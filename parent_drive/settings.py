@@ -1,10 +1,6 @@
-# Test change to verify git
 from pathlib import Path
-# ... rest of the file
-
-# from pathlib import Path
 import os
-import dj_database_url # <-- Додайте цей новий імпорт
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-default-key-for-local-dev')
@@ -56,13 +52,9 @@ TEMPLATES = [
 WSGI_APPLICATION = 'parent_drive.wsgi.application'
 
 # --- ВИПРАВЛЕННЯ ТУТ ---
-# Цей код автоматично налаштовує базу даних зі змінної DATABASE_URL,
-# яку надає Railway, але повертається до SQLite для локальної розробки.
+# Ми прибираємо 'default', щоб змусити Django використовувати DATABASE_URL
 DATABASES = {
-    'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600
-    )
+    'default': dj_database_url.config(conn_max_age=600)
 }
 
 AUTH_PASSWORD_VALIDATORS = []
