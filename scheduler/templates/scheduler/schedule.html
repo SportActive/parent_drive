@@ -7,7 +7,9 @@
     <style>
         body { font-family: sans-serif; margin: 0; }
         #calendar { max-width: 900px; margin: 20px auto; }
-        .user-nav { background-color: #f8f9fa; padding: 10px 20px; text-align: right; border-bottom: 1px solid #ddd; }
+        .user-nav { background-color: #f8f9fa; padding: 10px 20px; text-align: right; border-bottom: 1px solid #ddd; display: flex; justify-content: flex-end; align-items: center; gap: 15px;}
+        .user-nav form { margin: 0; }
+        .user-nav button { background: none; border: none; color: #007bff; text-decoration: underline; cursor: pointer; font-size: 1em; padding: 0; }
         .my-drive-event, .swap-request-event, .other-drive-event, .unassigned-event, .holiday-event { cursor: pointer; }
         .my-drive-event { background-color: #28a745; border-color: #28a745; }
         .other-drive-event { background-color: #007bff; border-color: #007bff; }
@@ -20,9 +22,12 @@
   <body>
     <div class="user-nav">
         {% if user.is_authenticated %}
-            Вітаємо, **{{ user.username }}**!
-            <a href="{% url 'my_schedule' %}" style="margin-left: 15px;">Мій кабінет</a>
-            <a href="{% url 'logout' %}" style="margin-left: 15px;">Вийти</a>
+            <span>Вітаємо, **{{ user.username }}**!</span>
+            <a href="{% url 'my_schedule' %}">Мій кабінет</a>
+            <form action="{% url 'logout' %}" method="post">
+                {% csrf_token %}
+                <button type="submit">Вийти</button>
+            </form>
         {% else %}
             <a href="{% url 'login' %}">Увійти</a>
         {% endif %}
@@ -31,6 +36,8 @@
     <div id='calendar' data-is-admin="{{ is_admin }}"></div>
 
     <script>
+        // The JavaScript does not need to be changed.
+        // It's the same as the last working version.
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -52,12 +59,12 @@
             const isAdmin = calendarEl.dataset.isAdmin === 'True';
 
             var calendar = new FullCalendar.Calendar(calendarEl, {
-                height: 'auto', // Автоматична висота
+                height: 'auto',
                 initialView: 'dayGridMonth',
                 locale: 'uk',
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listWeek' },
                 events: "{% url 'schedule_events' %}",
-
+                
                 dateClick: function(info) {
                     if (!isAdmin) { return; }
                     if (confirm(`Зробити ${info.dateStr} вихідним/робочим днем?`)) {
@@ -69,11 +76,11 @@
                         .then(() => calendar.refetchEvents());
                     }
                 },
-
+                
                 eventClick: function(info) {
                     const props = info.event.extendedProps;
                     const eventId = info.event.id;
-
+                    
                     if (isAdmin && eventId.startsWith('holiday_')) {
                         if (confirm(`Зробити ${info.event.startStr} знову робочим днем?`)) {
                              fetch("{% url 'toggle_holiday' %}", {
@@ -85,11 +92,11 @@
                         }
                         return;
                     }
-
+                    
                     if (isAdmin) {
                         if (confirm("Ви увійшли як адміністратор. Перейти на сторінку редагування цього чергування?")) {
                             window.open(props.admin_url, '_blank');
-                            return;
+                            return; 
                         }
                     }
 
@@ -100,7 +107,7 @@
                                 headers: { 'X-CSRFToken': csrftoken }
                             }).then(() => calendar.refetchEvents());
                         }
-                    }
+                    } 
                     else if (props.is_swap_requested && !props.is_mine) {
                         if (confirm("Ви готові підмінити цього водія?")) {
                             fetch(`/accept_swap/${info.event.id}/`, {
