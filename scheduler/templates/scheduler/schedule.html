@@ -1,62 +1,90 @@
-from django.core.management.base import BaseCommand
-from scheduler.models import ParentProfile, DrivingSlot, Unavailability, Holiday
-from django.db.models import Count, Q
-import datetime
-from calendar import monthrange
+<!DOCTYPE html>
+<html lang='uk'>
+  <head>
+    <meta charset='utf-8' />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Розклад поїздок</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; }
+        #calendar { max-width: 900px; margin: 20px auto; }
+        .user-nav { background-color: #f8f9fa; padding: 10px 20px; text-align: right; border-bottom: 1px solid #ddd; display: flex; justify-content: flex-end; align-items: center; gap: 15px;}
+        .user-nav form { margin: 0; }
+        .user-nav button { background: none; border: none; color: #007bff; text-decoration: underline; cursor: pointer; font-size: 1em; padding: 0; }
+        .my-drive-event, .swap-request-event, .other-drive-event, .unassigned-event, .holiday-event { cursor: pointer; }
+        .my-drive-event { background-color: #28a745; border-color: #28a745; }
+        .other-drive-event { background-color: #007bff; border-color: #007bff; }
+        .unassigned-event { background-color: #ffc107; border-color: #ffc107; color: black; }
+        .swap-request-event { background-color: #6c757d; border-color: #6c757d; }
+        .holiday-event { background-color: #fd7e14; border-color: #fd7e14; }
+    </style>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
+  </head>
+  <body>
+    <div class="user-nav">
+        {% if user.is_authenticated %}
+            <span>Вітаємо, **{{ user.username }}**!</span>
+            <a href="{% url 'my_schedule' %}">Мій кабінет</a>
+            <form action="{% url 'logout' %}" method="post">
+                {% csrf_token %}
+                <button type="submit">Вийти</button>
+            </form>
+        {% else %}
+            <a href="{% url 'login' %}">Увійти</a>
+        {% endif %}
+    </div>
 
-class Command(BaseCommand):
-    help = 'Intelligently updates or creates a schedule for the next month.'
+    <div id='calendar'></div>
 
-    def add_arguments(self, parser):
-        parser.add_argument('--reset', action='store_true', help='Delete the schedule for the target month before generating a new one.')
+    <script>
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        const csrftoken = getCookie('csrftoken');
 
-    def handle(self, *args, **options):
-        today = datetime.date.today()
-        if today.month == 12:
-            target_year, target_month = today.year + 1, 1
-        else:
-            target_year, target_month = today.year, today.month + 1
-        
-        if options['reset']:
-            DrivingSlot.objects.filter(date__year=target_year, date__month=target_month).delete()
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
 
-        start_of_month = datetime.date(target_year, target_month, 1)
-        num_days = monthrange(target_year, target_month)[1]
-        holidays_in_month = set(Holiday.objects.filter(date__year=target_year, date__month=target_month).values_list('date', flat=True))
-        all_parents = list(ParentProfile.objects.filter(is_driver=True))
-
-        if not all_parents:
-            self.stdout.write(self.style.ERROR('Не знайдено батьків-водіїв у базі даних.'))
-            return
-
-        self.stdout.write(f"Оновлення розкладу для {start_of_month.strftime('%B %Y')}...")
-
-        for day in range(1, num_days + 1):
-            current_date = datetime.date(target_year, target_month, day)
-            if current_date in holidays_in_month or current_date.weekday() != 4:
-                continue
-
-            existing_slot = DrivingSlot.objects.filter(date=current_date).first()
-            if existing_slot and existing_slot.driver and not existing_slot.is_swap_requested:
-                continue
-
-            unavailable_parents = Unavailability.objects.filter(start_date__lte=current_date, end_date__gte=current_date).values_list('parent_id', flat=True)
-            available_parents = [p for p in all_parents if p.id not in unavailable_parents]
-
-            if not available_parents:
-                self.stdout.write(self.style.WARNING(f"  ! Не вдалося знайти вільного водія для {current_date}"))
-                continue
-
-            parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(
-                drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))
-            ).order_by('drive_count')
-            
-            fairest_driver = parent_counts[0]
-            
-            slot, _ = DrivingSlot.objects.get_or_create(date=current_date)
-            slot.driver = fairest_driver
-            slot.is_swap_requested = False
-            slot.save()
-            self.stdout.write(self.style.SUCCESS(f"  > Призначено {fairest_driver} на {current_date} (Всього поїздок: {fairest_driver.drive_count})"))
-
-        self.stdout.write(self.style.SUCCESS('\nОновлення розкладу завершено.'))
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                height: 'auto',
+                initialView: 'dayGridMonth',
+                locale: 'uk',
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listWeek' },
+                events: "{% url 'schedule_events' %}",
+                
+                eventClick: function(info) {
+                    const props = info.event.extendedProps;
+                    
+                    if (props.is_mine && !props.is_swap_requested) {
+                        if (confirm("Ви впевнені, що хочете попросити про заміну?")) {
+                            fetch(`/swap/${info.event.id}/`, {
+                                method: 'POST',
+                                headers: { 'X-CSRFToken': csrftoken }
+                            }).then(() => calendar.refetchEvents());
+                        }
+                    } 
+                    else if (props.is_swap_requested && !props.is_mine) {
+                        if (confirm("Ви готові підмінити цього водія?")) {
+                            fetch(`/accept_swap/${info.event.id}/`, {
+                                method: 'POST',
+                                headers: { 'X-CSRFToken': csrftoken }
+                            }).then(() => calendar.refetchEvents());
+                        }
+                    }
+                }
+            });
+            calendar.render();
+        });
+    </script>
+  </body>
+</html>
