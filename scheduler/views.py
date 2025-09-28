@@ -24,57 +24,48 @@ def signup_view(request):
             login(request, user)
             return redirect('schedule')
     else:
+        # Реєстрація відкрита для всіх, хто ще не в системі
         form = UserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
 
 def schedule_view(request):
-    context = { 'is_admin': request.user.is_staff }
-    return render(request, 'scheduler/schedule.html', context)
+    # Головний календар не потребує знати про статус адміністратора
+    return render(request, 'scheduler/schedule.html')
 
 def schedule_events(request):
     events = []
     holidays = Holiday.objects.all()
     for holiday in holidays:
         events.append({ 'id': f"holiday_{holiday.id}", 'title': holiday.name, 'start': holiday.date.strftime('%Y-%m-%d'), 'allDay': True, 'className': 'holiday-event' })
+
     slots = DrivingSlot.objects.all()
     for slot in slots:
         is_mine = False
-        admin_url = reverse('admin:scheduler_drivingslot_change', args=[slot.id])
         if request.user.is_authenticated and slot.driver:
             is_mine = (slot.driver.user == request.user)
+        
         title = f"Водій: {slot.driver}" if slot.driver else "ПОТРІБЕН ВОДІЙ!"
         className = 'other-drive-event'
         if slot.is_swap_requested:
             title = f"ЗАМІНА: {slot.driver}"
             className = 'swap-request-event'
         elif slot.driver is None:
+            # Показуємо, хто недоступний у цей день
+            unavailable_drivers = Unavailability.objects.filter(start_date__lte=slot.date, end_date__gte=slot.date)
+            if unavailable_drivers.exists():
+                drivers_str = ", ".join([str(u.parent) for u in unavailable_drivers])
+                title = f"Недоступні: {drivers_str}"
             className = 'unassigned-event'
         elif is_mine:
             className = 'my-drive-event'
-        events.append({ 'id': slot.id, 'title': title, 'start': slot.date.strftime('%Y-%m-%d'), 'extendedProps': { 'is_mine': is_mine, 'is_swap_requested': slot.is_swap_requested, 'admin_url': admin_url }, 'className': className })
+            
+        events.append({ 'id': slot.id, 'title': title, 'start': slot.date.strftime('%Y-%m-%d'), 'extendedProps': { 'is_mine': is_mine, 'is_swap_requested': slot.is_swap_requested }, 'className': className })
+    
     return JsonResponse(events, safe=False)
 
 @login_required
-def toggle_holiday(request):
-    if not request.user.is_staff:
-        return JsonResponse({'status': 'error', 'message': 'Доступ заборонено.'}, status=403)
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            date_str = data.get('date')
-            date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
-            holiday, created = Holiday.objects.get_or_create(date=date_obj, defaults={'name': 'Вихідний'})
-            if not created:
-                holiday.delete()
-                return JsonResponse({'status': 'deleted'})
-            else:
-                return JsonResponse({'status': 'created'})
-        except Exception as e:
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
-    return JsonResponse({'status': 'error'}, status=400)
-
-@login_required
 def my_schedule_view(request):
+    # Особистий кабінет знає, чи є користувач адміністратором
     context = {
         'is_admin': request.user.is_staff
     }
@@ -98,6 +89,8 @@ def unavailability_events(request):
         if drive.is_swap_requested:
             title = f"ЗАМІНА: {drive.driver}"
             className = 'swap-request-event'
+        elif drive.driver is None:
+            className = 'unassigned-event'
         elif is_mine:
             className = 'my-drive'
         events.append({ 'id': f"drive_{drive.id}", 'title': title, 'start': drive.date.strftime('%Y-%m-%d'), 'extendedProps': { 'is_mine': is_mine, 'is_swap_requested': drive.is_swap_requested, 'admin_url': admin_url }, 'classNames': [className] })
@@ -116,39 +109,8 @@ def update_unavailability(request):
                 existing_event.delete()
                 return JsonResponse({'status': 'deleted'})
             else:
-                new_event = Unavailability.objects.create(parent=parent_profile, start_date=start_date, end_date=start_date, reason='Зайнятий')
-                if (new_event.start_date - datetime.date.today()).days < 7:
-                    conflicting_drives = DrivingSlot.objects.filter(driver=parent_profile, date=new_event.start_date, is_swap_requested=False)
-                    for drive in conflicting_drives:
-                        drive.is_swap_requested = True
-                        drive.save()
-                    return JsonResponse({'status': 'created_swap_requested'})
-                else:
-                    start_recalc_date = new_event.start_date
-                    today = datetime.date.today()
-                    end_year = today.year
-                    if today.month >= 9:
-                        end_year += 1
-                    end_recalc_date = datetime.date(end_year, 9, 1)
-                    DrivingSlot.objects.filter(date__gte=start_recalc_date).delete()
-                    all_parents = list(ParentProfile.objects.filter(is_driver=True))
-                    holidays = set(Holiday.objects.values_list('date', flat=True))
-                    current_date = start_recalc_date
-                    while current_date < end_recalc_date:
-                        if current_date.weekday() == 4 and current_date not in holidays:
-                            unavailable_parents = Unavailability.objects.filter(start_date__lte=current_date, end_date__gte=current_date).values_list('parent_id', flat=True)
-                            available_parents = [p for p in all_parents if p.id not in unavailable_parents]
-                            slot, _ = DrivingSlot.objects.get_or_create(date=current_date)
-                            if available_parents:
-                                parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))).order_by('drive_count')
-                                fairest_driver = parent_counts[0]
-                                slot.driver = fairest_driver
-                            else:
-                                slot.driver = None
-                            slot.is_swap_requested = False
-                            slot.save()
-                        current_date += datetime.timedelta(days=1)
-                    return JsonResponse({'status': 'created_recalculated'})
+                Unavailability.objects.create(parent=parent_profile, start_date=start_date, end_date=start_date, reason='Зайнятий')
+                return JsonResponse({'status': 'created'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error'}, status=400)
@@ -211,8 +173,10 @@ def recalculate_schedule_view(request):
             end_year += 1
         end_recalculation_date = datetime.date(end_year, 9, 1)
         DrivingSlot.objects.filter(date__gte=start_recalculation_date).delete()
+        
         all_parents = list(ParentProfile.objects.filter(is_driver=True))
         holidays = set(Holiday.objects.values_list('date', flat=True))
+        
         slots_created = 0
         current_date = start_recalculation_date
         while current_date < end_recalculation_date:
@@ -236,6 +200,7 @@ def recalculate_schedule_view(request):
                 slots_created += 1
 
             current_date += datetime.timedelta(days=1)
+            
         return JsonResponse({'status': 'ok', 'message': f'Майбутній розклад було успішно перераховано. Створено {slots_created} нових чергувань.'})
     return JsonResponse({'status': 'error'}, status=400)
 
@@ -291,6 +256,25 @@ def admin_assign_driver(request):
             slot.save()
             
             return JsonResponse({'status': 'ok'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    return JsonResponse({'status': 'error'}, status=400)
+
+@login_required
+def toggle_holiday(request): # Ця функція дублювалась, залишаємо одну
+    if not request.user.is_staff:
+        return JsonResponse({'status': 'error', 'message': 'Доступ заборонено.'}, status=403)
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            date_str = data.get('date')
+            date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            holiday, created = Holiday.objects.get_or_create(date=date_obj, defaults={'name': 'Вихідний'})
+            if not created:
+                holiday.delete()
+                return JsonResponse({'status': 'deleted'})
+            else:
+                return JsonResponse({'status': 'created'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error'}, status=400)
