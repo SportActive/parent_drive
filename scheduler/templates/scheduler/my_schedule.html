@@ -10,7 +10,7 @@
         h1, .legend, h2 { color: #333; }
         .nav { padding: 1em 2em; background: #fff; border-bottom: 1px solid #ddd; }
         #my-calendar { margin-top: 2em; }
-        .my-unavailability, .my-drive { cursor: pointer !important; }
+        .my-unavailability, .my-drive, .swap-request-event, .other-drive, .holiday-event { cursor: pointer !important; }
         .my-unavailability { background-color: #dc3545 !important; border-color: #dc3545 !important; }
         .other-unavailability { background-color: #6c757d !important; border-color: #6c757d !important; opacity: 0.7; }
         .my-drive { background-color: #28a745 !important; border-color: #28a745 !important; }
@@ -20,6 +20,11 @@
         .admin-actions { margin-top: 2em; padding-top: 1.5em; border-top: 1px solid #eee; }
         .recalculate-btn { background-color: #17a2b8; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
         .recalculate-btn:hover { background-color: #138496; }
+        #context-menu { position: absolute; background: white; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); padding: 5px 0; min-width: 220px; z-index: 1000; display: none; border-radius: 5px; }
+        #context-menu ul { list-style: none; padding: 0; margin: 0; }
+        #context-menu ul li { padding: 8px 15px; cursor: pointer; }
+        #context-menu ul li:hover { background: #f4f4f4; }
+        #context-menu ul li.separator { border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px; }
     </style>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
 </head>
@@ -33,7 +38,7 @@
     </div>
     <div class="container">
         <h1>Мій графік</h1>
-        <p>Клікніть на порожній день, щоб змінити статус. Клікніть на свою подію, щоб керувати нею.</p>
+        <p>Клікніть на будь-який день або подію, щоб відкрити меню дій.</p>
         <div class="legend">
              <span style="background-color: #28a745;"></span> Моє чергування &nbsp;
              <span style="background-color: #007bff;"></span> Чуже чергування &nbsp;
@@ -49,6 +54,11 @@
         </div>
         {% endif %}
     </div>
+
+    <div id="context-menu">
+      <ul id="context-menu-items"></ul>
+    </div>
+
     <script>
         function getCookie(name) {
             let cookieValue = null;
@@ -69,6 +79,30 @@
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('my-calendar');
             const isAdmin = calendarEl.dataset.isAdmin === 'True';
+            const isAuthenticated = {{ user.is_authenticated|yesno:"true,false" }};
+            
+            const contextMenu = document.getElementById('context-menu');
+            const menuItems = document.getElementById('context-menu-items');
+
+            function showContextMenu(x, y, items) {
+                if (items.length === 0) return;
+                menuItems.innerHTML = '';
+                items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item.label;
+                    if (item.className) li.className = item.className;
+                    li.addEventListener('click', () => {
+                        item.action();
+                        contextMenu.style.display = 'none';
+                    });
+                    menuItems.appendChild(li);
+                });
+                contextMenu.style.left = x + 'px';
+                contextMenu.style.top = y + 'px';
+                contextMenu.style.display = 'block';
+            }
+
+            window.addEventListener('click', () => contextMenu.style.display = 'none');
 
             var calendar = new FullCalendar.Calendar(calendarEl, {
                 height: 'auto',
@@ -76,46 +110,54 @@
                 locale: 'uk',
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth' },
                 events: "{% url 'unavailability_events' %}",
+                
                 dateClick: function(info) {
-                    fetch("{% url 'update_unavailability' %}", {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
-                        body: JSON.stringify({ start_date: info.dateStr })
-                    })
-                    .then(() => calendar.refetchEvents());
+                    info.jsEvent.stopPropagation();
+                    contextMenu.style.display = 'none';
+                    const items = [];
+                    if (isAuthenticated) {
+                         items.push({ label: 'Я зайнятий / Я вільний', action: () => {
+                            fetch("{% url 'update_unavailability' %}", { method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken}, body: JSON.stringify({ start_date: info.dateStr }) }).then(() => calendar.refetchEvents());
+                        }});
+                    }
+                    if (isAdmin) {
+                        items.push({ label: 'Призначити чергування...', className: 'separator', action: () => {
+                            fetch("{% url 'get_parents_list' %}")
+                                .then(res => res.json())
+                                .then(parents => {
+                                    let promptText = "Виберіть водія:\n";
+                                    parents.forEach((p, i) => promptText += `${i + 1}: ${p.name}\n`);
+                                    const choice = parseInt(prompt(promptText)) - 1;
+                                    if (!isNaN(choice) && parents[choice]) {
+                                        fetch("{% url 'admin_assign_driver' %}", { method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken}, body: JSON.stringify({ date: info.dateStr, parent_id: parents[choice].id }) }).then(() => calendar.refetchEvents());
+                                    }
+                                });
+                        }});
+                    }
+                    showContextMenu(info.jsEvent.pageX, info.jsEvent.pageY, items);
                 },
+                
                 eventClick: function(info) {
-                    const eventId = info.event.id;
+                    info.jsEvent.stopPropagation();
+                    contextMenu.style.display = 'none';
                     const props = info.event.extendedProps;
+                    const eventId = info.event.id;
+                    const items = [];
+
+                    if (props.is_mine && eventId.startsWith('drive_') && !props.is_swap_requested) {
+                        items.push({ label: 'Попросити про заміну', action: () => {
+                            const driveId = eventId.replace('drive_', '');
+                            fetch(`/swap/${driveId}/`, { method: 'POST', headers: { 'X-CSRFToken': csrftoken } }).then(() => calendar.refetchEvents());
+                        }});
+                    }
                     
                     if (isAdmin && eventId.startsWith('drive_')) {
-                        if (confirm("Ви увійшли як адміністратор. Перейти на сторінку редагування цього чергування?")) {
-                            window.open(props.admin_url, '_blank');
-                            return;
-                        }
+                        items.push({ label: 'Редагувати чергування (Адмін)', className: 'separator', action: () => {
+                             window.open(props.admin_url, '_blank');
+                        }});
                     }
-
-                    if (props.is_mine) {
-                        if (eventId.startsWith('unavail_')) {
-                            if (confirm("Зробити цей день знову доступним?")) {
-                                fetch("{% url 'update_unavailability' %}", {
-                                    method: 'POST',
-                                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
-                                    body: JSON.stringify({ start_date: info.event.startStr })
-                                })
-                                .then(() => calendar.refetchEvents());
-                            }
-                        }
-                        else if (eventId.startsWith('drive_') && !props.is_swap_requested) {
-                            if (confirm("Ви хочете виставити це чергування на заміну?")) {
-                                const driveId = eventId.replace('drive_', '');
-                                fetch(`/swap/${driveId}/`, {
-                                    method: 'POST',
-                                    headers: { 'X-CSRFToken': csrftoken }
-                                }).then(() => calendar.refetchEvents());
-                            }
-                        }
-                    }
+                    
+                    showContextMenu(info.jsEvent.pageX, info.jsEvent.pageY, items);
                 }
             });
             calendar.render();
@@ -123,19 +165,15 @@
             const recalcBtn = document.getElementById('recalculate-btn');
             if (recalcBtn) {
                 recalcBtn.addEventListener('click', function() {
-                    if (confirm('Ви впевнені? Це видалить та перестворить весь майбутній розклад (починаючи через 7 днів). Цю дію не можна буде скасувати.')) {
+                    if (confirm('Ви впевнені? Ця дія незворотна.')) {
                         fetch("{% url 'recalculate_schedule' %}", {
                             method: 'POST',
                             headers: { 'X-CSRFToken': csrftoken }
                         })
                         .then(response => response.json())
                         .then(data => {
-                            if (data.status === 'ok') {
-                                alert(data.message);
-                                calendar.refetchEvents();
-                            } else {
-                                alert('Сталася помилка: ' + data.message);
-                            }
+                            alert(data.message || 'Сталася помилка.');
+                            calendar.refetchEvents();
                         });
                     }
                 });
