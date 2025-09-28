@@ -15,6 +15,7 @@
         .other-unavailability { background-color: #6c757d !important; border-color: #6c757d !important; opacity: 0.7; }
         .my-drive { background-color: #28a745 !important; border-color: #28a745 !important; }
         .other-drive { background-color: #007bff !important; border-color: #007bff !important; }
+        .swap-request-event { background-color: #6c757d !important; border-color: #6c757d !important; }
         .legend span { display: inline-block; width: 15px; height: 15px; margin-right: 5px; vertical-align: middle; }
         .admin-actions { margin-top: 2em; padding-top: 1.5em; border-top: 1px solid #eee; }
         .recalculate-btn { background-color: #17a2b8; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
@@ -37,9 +38,9 @@
              <span style="background-color: #28a745;"></span> Моє чергування &nbsp;
              <span style="background-color: #007bff;"></span> Чуже чергування &nbsp;
              <span style="background-color: #dc3545;"></span> Моя недоступність &nbsp;
-             <span style="background-color: #6c757d;"></span> Чужа недоступність
+             <span style="background-color: #6c757d;"></span> Чужа недоступність / Заміна
         </div>
-        <div id='my-calendar'></div>
+        <div id='my-calendar' data-is-admin="{{ is_admin }}"></div>
         {% if user.is_staff %}
         <div class="admin-actions">
             <h2>Дії Адміністратора</h2>
@@ -67,8 +68,10 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('my-calendar');
+            const isAdmin = calendarEl.dataset.isAdmin === 'True';
+
             var calendar = new FullCalendar.Calendar(calendarEl, {
-                height: 'auto', // Автоматична висота
+                height: 'auto',
                 initialView: 'dayGridMonth',
                 locale: 'uk',
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth' },
@@ -83,25 +86,34 @@
                 },
                 eventClick: function(info) {
                     const eventId = info.event.id;
-                    const isMine = info.event.extendedProps.is_mine;
-                    if (!isMine) { return; }
-                    if (eventId.startsWith('unavail_')) {
-                        if (confirm("Зробити цей день знову доступним?")) {
-                             fetch("{% url 'update_unavailability' %}", {
-                                method: 'POST',
-                                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
-                                body: JSON.stringify({ start_date: info.event.startStr })
-                            })
-                            .then(() => calendar.refetchEvents());
+                    const props = info.event.extendedProps;
+                    
+                    if (isAdmin && eventId.startsWith('drive_')) {
+                        if (confirm("Ви увійшли як адміністратор. Перейти на сторінку редагування цього чергування?")) {
+                            window.open(props.admin_url, '_blank');
+                            return;
                         }
                     }
-                    else if (eventId.startsWith('drive_')) {
-                        if (confirm("Ви хочете виставити це чергування на заміну?")) {
-                            const driveId = eventId.replace('drive_', '');
-                            fetch(`/swap/${driveId}/`, {
-                                method: 'POST',
-                                headers: { 'X-CSRFToken': csrftoken }
-                            }).then(() => calendar.refetchEvents());
+
+                    if (props.is_mine) {
+                        if (eventId.startsWith('unavail_')) {
+                            if (confirm("Зробити цей день знову доступним?")) {
+                                fetch("{% url 'update_unavailability' %}", {
+                                    method: 'POST',
+                                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
+                                    body: JSON.stringify({ start_date: info.event.startStr })
+                                })
+                                .then(() => calendar.refetchEvents());
+                            }
+                        }
+                        else if (eventId.startsWith('drive_') && !props.is_swap_requested) {
+                            if (confirm("Ви хочете виставити це чергування на заміну?")) {
+                                const driveId = eventId.replace('drive_', '');
+                                fetch(`/swap/${driveId}/`, {
+                                    method: 'POST',
+                                    headers: { 'X-CSRFToken': csrftoken }
+                                }).then(() => calendar.refetchEvents());
+                            }
                         }
                     }
                 }
