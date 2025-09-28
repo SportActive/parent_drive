@@ -16,6 +16,7 @@
         .my-drive { background-color: #28a745 !important; border-color: #28a745 !important; }
         .other-drive { background-color: #007bff !important; border-color: #007bff !important; }
         .swap-request-event { background-color: #6c757d !important; border-color: #6c757d !important; }
+        .holiday-event { background-color: #fd7e14 !important; border-color: #fd7e14 !important; }
         .legend span { display: inline-block; width: 15px; height: 15px; margin-right: 5px; vertical-align: middle; }
         .admin-actions { margin-top: 2em; padding-top: 1.5em; border-top: 1px solid #eee; }
         .recalculate-btn { background-color: #17a2b8; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
@@ -121,7 +122,10 @@
                         }});
                     }
                     if (isAdmin) {
-                        items.push({ label: 'Призначити чергування...', className: 'separator', action: () => {
+                        items.push({ label: 'Зробити вихідним / робочим', className: 'separator', action: () => {
+                             fetch("{% url 'toggle_holiday' %}", { method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken}, body: JSON.stringify({ date: info.dateStr }) }).then(() => calendar.refetchEvents());
+                        }});
+                        items.push({ label: 'Призначити чергування...', action: () => {
                             fetch("{% url 'get_parents_list' %}")
                                 .then(res => res.json())
                                 .then(parents => {
@@ -152,7 +156,7 @@
                     }
                     
                     if (isAdmin && eventId.startsWith('drive_')) {
-                        items.push({ label: 'Редагувати чергування (Адмін)', className: 'separator', action: () => {
+                        items.push({ label: 'Редагувати в адмін-панелі', className: 'separator', action: () => {
                              window.open(props.admin_url, '_blank');
                         }});
                     }
