@@ -178,17 +178,34 @@ def request_swap(request, slot_id):
 def statistics_view(request):
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
+    
     drives_query = DrivingSlot.objects.filter(driver__isnull=False)
+
     if start_date_str:
         drives_query = drives_query.filter(date__gte=start_date_str)
     if end_date_str:
         drives_query = drives_query.filter(date__lte=end_date_str)
-    stats = drives_query.values('driver__user__first_name', 'driver__user__username').annotate(drive_count=Count('id')).order_by('-drive_count')
+
+    stats = drives_query.values(
+        'driver__user__first_name', 
+        'driver__user__username'
+    ).annotate(
+        drive_count=Count('id')
+    ).order_by('-drive_count')
+
     parent_stats = []
     for stat in stats:
         display_name = stat['driver__user__first_name'] or stat['driver__user__username']
-        parent_stats.append({ 'name': display_name, 'count': stat['drive_count'] })
-    context = { 'parent_stats': parent_stats, 'start_date': start_date_str, 'end_date': end_date_str, }
+        parent_stats.append({
+            'name': display_name,
+            'count': stat['drive_count']
+        })
+
+    context = {
+        'parent_stats': parent_stats,
+        'start_date': start_date_str,
+        'end_date': end_date_str,
+    }
     return render(request, 'scheduler/statistics.html', context)
 
 @staff_member_required
@@ -210,7 +227,9 @@ def recalculate_schedule_view(request):
                 unavailable_parents = Unavailability.objects.filter(start_date__lte=current_date, end_date__gte=current_date).values_list('parent_id', flat=True)
                 available_parents = [p for p in all_parents if p.id not in unavailable_parents]
                 if available_parents:
-                    parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))).order_by('drive_count')
+                    parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(
+                        drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))
+                    ).order_by('drive_count')
                     fairest_driver = parent_counts[0]
                     DrivingSlot.objects.create(date=current_date, driver=fairest_driver)
                     slots_created += 1
