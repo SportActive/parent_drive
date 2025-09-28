@@ -4,12 +4,13 @@ from .models import DrivingSlot, ParentProfile, Unavailability, Holiday
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.models import User
-from django.db.models import Count, Q
+from django.db.models import Count, Q, F
 from django.urls import reverse
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import login
 import datetime
 import json
+from collections import defaultdict
 
 def signup_view(request):
     if request.method == 'POST':
@@ -24,6 +25,8 @@ def signup_view(request):
             login(request, user)
             return redirect('schedule')
     else:
+        if User.objects.exists() and not request.user.is_staff:
+             return redirect('login')
         form = UserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
 
@@ -35,7 +38,7 @@ def schedule_events(request):
     events = []
     holidays = Holiday.objects.all()
     for holiday in holidays:
-        events.append({ 'id': f"holiday_{holiday.id}", 'title': holiday.name, 'start': holiday.date.strftime('%Y-%m-%d'), 'allDay': True, 'className': 'holiday-event' })
+        events.append({ 'title': holiday.name, 'start': holiday.date.strftime('%Y-%m-%d'), 'display': 'background', 'color': '#ff9f89' })
     slots = DrivingSlot.objects.all()
     for slot in slots:
         is_mine = False
@@ -178,13 +181,39 @@ def request_swap(request, slot_id):
 def statistics_view(request):
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
-    drive_filter = Q()
+    
+    # Створюємо базовий запит
+    drives_query = DrivingSlot.objects.filter(driver__isnull=False)
+
+    # Додаємо фільтри за датою, якщо вони є
     if start_date_str:
-        drive_filter &= Q(drivingslot__date__gte=start_date_str)
+        drives_query = drives_query.filter(date__gte=start_date_str)
     if end_date_str:
-        drive_filter &= Q(drivingslot__date__lte=end_date_str)
-    parent_stats = ParentProfile.objects.annotate(drive_count=Count('drivingslot', filter=drive_filter)).order_by('-drive_count')
-    context = { 'parent_stats': parent_stats, 'start_date': start_date_str, 'end_date': end_date_str, }
+        drives_query = drives_query.filter(date__lte=end_date_str)
+
+    # Рахуємо кількість поїздок для кожного унікального користувача
+    stats = drives_query.values(
+        'driver__user__first_name', 
+        'driver__user__username'
+    ).annotate(
+        drive_count=Count('id')
+    ).order_by('-drive_count')
+
+    # Готуємо дані для відображення
+    parent_stats = []
+    for stat in stats:
+        # Використовуємо first_name, якщо воно є, інакше username
+        display_name = stat['driver__user__first_name'] or stat['driver__user__username']
+        parent_stats.append({
+            'name': display_name,
+            'count': stat['drive_count']
+        })
+
+    context = {
+        'parent_stats': parent_stats,
+        'start_date': start_date_str,
+        'end_date': end_date_str,
+    }
     return render(request, 'scheduler/statistics.html', context)
 
 @staff_member_required

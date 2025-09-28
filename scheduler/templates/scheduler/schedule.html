@@ -7,27 +7,29 @@
     <style>
         body { font-family: sans-serif; margin: 0; }
         #calendar { max-width: 900px; margin: 20px auto; }
-        .user-nav { background-color: #f8f9fa; padding: 10px 20px; text-align: right; border-bottom: 1px solid #ddd; display: flex; justify-content: flex-end; align-items: center; gap: 15px;}
-        .user-nav form { margin: 0; }
-        .user-nav button { background: none; border: none; color: #007bff; text-decoration: underline; cursor: pointer; font-size: 1em; padding: 0; }
+        .user-nav { background-color: #f8f9fa; padding: 10px 20px; text-align: right; border-bottom: 1px solid #ddd; }
         .my-drive-event, .swap-request-event, .other-drive-event, .unassigned-event, .holiday-event { cursor: pointer; }
         .my-drive-event { background-color: #28a745; border-color: #28a745; }
         .other-drive-event { background-color: #007bff; border-color: #007bff; }
         .unassigned-event { background-color: #ffc107; border-color: #ffc107; color: black; }
         .swap-request-event { background-color: #6c757d; border-color: #6c757d; }
         .holiday-event { background-color: #fd7e14; border-color: #fd7e14; }
+        
+        /* Стилі для контекстного меню */
+        #context-menu { position: absolute; background: white; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); padding: 5px 0; min-width: 200px; z-index: 1000; display: none; border-radius: 5px; }
+        #context-menu ul { list-style: none; padding: 0; margin: 0; }
+        #context-menu ul li { padding: 8px 15px; cursor: pointer; }
+        #context-menu ul li:hover { background: #f4f4f4; }
+        #context-menu ul li.separator { border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px; }
     </style>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
   </head>
   <body>
     <div class="user-nav">
         {% if user.is_authenticated %}
-            <span>Вітаємо, **{{ user.username }}**!</span>
-            <a href="{% url 'my_schedule' %}">Мій кабінет</a>
-            <form action="{% url 'logout' %}" method="post">
-                {% csrf_token %}
-                <button type="submit">Вийти</button>
-            </form>
+            Вітаємо, **{{ user.username }}**!
+            <a href="{% url 'my_schedule' %}" style="margin-left: 15px;">Мій кабінет</a>
+            <a href="{% url 'logout' %}" style="margin-left: 15px;">Вийти</a>
         {% else %}
             <a href="{% url 'login' %}">Увійти</a>
         {% endif %}
@@ -35,9 +37,11 @@
 
     <div id='calendar' data-is-admin="{{ is_admin }}"></div>
 
+    <div id="context-menu">
+      <ul id="context-menu-items"></ul>
+    </div>
+
     <script>
-        // The JavaScript does not need to be changed.
-        // It's the same as the last working version.
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -57,6 +61,32 @@
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('calendar');
             const isAdmin = calendarEl.dataset.isAdmin === 'True';
+            const isAuthenticated = {{ user.is_authenticated|yesno:"true,false" }};
+            
+            const contextMenu = document.getElementById('context-menu');
+            const menuItems = document.getElementById('context-menu-items');
+
+            function showContextMenu(x, y, items) {
+                if (items.length === 0) return;
+                
+                menuItems.innerHTML = '';
+                items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item.label;
+                    if (item.className) li.className = item.className;
+                    li.addEventListener('click', () => {
+                        item.action();
+                        contextMenu.style.display = 'none';
+                    });
+                    menuItems.appendChild(li);
+                });
+                contextMenu.style.left = x + 'px';
+                contextMenu.style.top = y + 'px';
+                contextMenu.style.display = 'block';
+            }
+
+            // Ховаємо меню при кліку будь-де на сторінці
+            window.addEventListener('click', () => contextMenu.style.display = 'none');
 
             var calendar = new FullCalendar.Calendar(calendarEl, {
                 height: 'auto',
@@ -66,56 +96,46 @@
                 events: "{% url 'schedule_events' %}",
                 
                 dateClick: function(info) {
-                    if (!isAdmin) { return; }
-                    if (confirm(`Зробити ${info.dateStr} вихідним/робочим днем?`)) {
-                        fetch("{% url 'toggle_holiday' %}", {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
-                            body: JSON.stringify({ date: info.dateStr })
-                        })
-                        .then(() => calendar.refetchEvents());
+                    // Зупиняємо стандартну поведінку, щоб наш клік не закрив меню одразу
+                    info.jsEvent.stopPropagation();
+                    contextMenu.style.display = 'none';
+
+                    const items = [];
+                    
+                    if (isAuthenticated) {
+                         items.push({ label: 'Я зайнятий / Я вільний', action: () => {
+                            fetch("{% url 'update_unavailability' %}", { method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken}, body: JSON.stringify({ start_date: info.dateStr }) }).then(() => calendar.refetchEvents());
+                        }});
                     }
+
+                    if (isAdmin) {
+                        items.push({ label: 'Зробити вихідним / робочим', className: 'separator', action: () => {
+                             if (confirm(`Зробити ${info.dateStr} вихідним/робочим днем?`)) {
+                                fetch("{% url 'toggle_holiday' %}", { method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken}, body: JSON.stringify({ date: info.dateStr }) }).then(() => calendar.refetchEvents());
+                            }
+                        }});
+                        items.push({ label: 'Призначити чергування...', action: () => {
+                            fetch("{% url 'get_parents_list' %}")
+                                .then(res => res.json())
+                                .then(parents => {
+                                    let promptText = "Виберіть водія:\n";
+                                    parents.forEach((p, i) => promptText += `${i + 1}: ${p.name}\n`);
+                                    const choice = parseInt(prompt(promptText)) - 1;
+                                    if (!isNaN(choice) && parents[choice]) {
+                                        fetch("{% url 'admin_assign_driver' %}", { method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken}, body: JSON.stringify({ date: info.dateStr, parent_id: parents[choice].id }) }).then(() => calendar.refetchEvents());
+                                    }
+                                });
+                        }});
+                    }
+                    
+                    showContextMenu(info.jsEvent.pageX, info.jsEvent.pageY, items);
                 },
                 
                 eventClick: function(info) {
-                    const props = info.event.extendedProps;
-                    const eventId = info.event.id;
-                    
-                    if (isAdmin && eventId.startsWith('holiday_')) {
-                        if (confirm(`Зробити ${info.event.startStr} знову робочим днем?`)) {
-                             fetch("{% url 'toggle_holiday' %}", {
-                                method: 'POST',
-                                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrftoken},
-                                body: JSON.stringify({ date: info.event.startStr })
-                            })
-                            .then(() => calendar.refetchEvents());
-                        }
-                        return;
-                    }
-                    
-                    if (isAdmin) {
-                        if (confirm("Ви увійшли як адміністратор. Перейти на сторінку редагування цього чергування?")) {
-                            window.open(props.admin_url, '_blank');
-                            return; 
-                        }
-                    }
-
-                    if (props.is_mine && !props.is_swap_requested) {
-                        if (confirm("Ви впевнені, що хочете попросити про заміну?")) {
-                            fetch(`/swap/${info.event.id}/`, {
-                                method: 'POST',
-                                headers: { 'X-CSRFToken': csrftoken }
-                            }).then(() => calendar.refetchEvents());
-                        }
-                    } 
-                    else if (props.is_swap_requested && !props.is_mine) {
-                        if (confirm("Ви готові підмінити цього водія?")) {
-                            fetch(`/accept_swap/${info.event.id}/`, {
-                                method: 'POST',
-                                headers: { 'X-CSRFToken': csrftoken }
-                            }).then(() => calendar.refetchEvents());
-                        }
-                    }
+                    // Зупиняємо стандартну поведінку, щоб наш клік не закрив меню одразу
+                    info.jsEvent.stopPropagation();
+                    contextMenu.style.display = 'none';
+                    // Тут можна буде додати контекстне меню і для подій
                 }
             });
             calendar.render();
