@@ -4,13 +4,12 @@ from .models import DrivingSlot, ParentProfile, Unavailability, Holiday
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.models import User
-from django.db.models import Count, Q, F
+from django.db.models import Count, Q
 from django.urls import reverse
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import login
 import datetime
 import json
-from collections import defaultdict
 
 def signup_view(request):
     if request.method == 'POST':
@@ -25,8 +24,6 @@ def signup_view(request):
             login(request, user)
             return redirect('schedule')
     else:
-        if User.objects.exists() and not request.user.is_staff:
-             return redirect('login')
         form = UserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
 
@@ -38,7 +35,7 @@ def schedule_events(request):
     events = []
     holidays = Holiday.objects.all()
     for holiday in holidays:
-        events.append({ 'title': holiday.name, 'start': holiday.date.strftime('%Y-%m-%d'), 'display': 'background', 'color': '#ff9f89' })
+        events.append({ 'id': f"holiday_{holiday.id}", 'title': holiday.name, 'start': holiday.date.strftime('%Y-%m-%d'), 'allDay': True, 'className': 'holiday-event' })
     slots = DrivingSlot.objects.all()
     for slot in slots:
         is_mine = False
@@ -181,39 +178,17 @@ def request_swap(request, slot_id):
 def statistics_view(request):
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
-    
-    # Створюємо базовий запит
     drives_query = DrivingSlot.objects.filter(driver__isnull=False)
-
-    # Додаємо фільтри за датою, якщо вони є
     if start_date_str:
         drives_query = drives_query.filter(date__gte=start_date_str)
     if end_date_str:
         drives_query = drives_query.filter(date__lte=end_date_str)
-
-    # Рахуємо кількість поїздок для кожного унікального користувача
-    stats = drives_query.values(
-        'driver__user__first_name', 
-        'driver__user__username'
-    ).annotate(
-        drive_count=Count('id')
-    ).order_by('-drive_count')
-
-    # Готуємо дані для відображення
+    stats = drives_query.values('driver__user__first_name', 'driver__user__username').annotate(drive_count=Count('id')).order_by('-drive_count')
     parent_stats = []
     for stat in stats:
-        # Використовуємо first_name, якщо воно є, інакше username
         display_name = stat['driver__user__first_name'] or stat['driver__user__username']
-        parent_stats.append({
-            'name': display_name,
-            'count': stat['drive_count']
-        })
-
-    context = {
-        'parent_stats': parent_stats,
-        'start_date': start_date_str,
-        'end_date': end_date_str,
-    }
+        parent_stats.append({ 'name': display_name, 'count': stat['drive_count'] })
+    context = { 'parent_stats': parent_stats, 'start_date': start_date_str, 'end_date': end_date_str, }
     return render(request, 'scheduler/statistics.html', context)
 
 @staff_member_required
@@ -235,9 +210,7 @@ def recalculate_schedule_view(request):
                 unavailable_parents = Unavailability.objects.filter(start_date__lte=current_date, end_date__gte=current_date).values_list('parent_id', flat=True)
                 available_parents = [p for p in all_parents if p.id not in unavailable_parents]
                 if available_parents:
-                    parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(
-                        drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))
-                    ).order_by('drive_count')
+                    parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))).order_by('drive_count')
                     fairest_driver = parent_counts[0]
                     DrivingSlot.objects.create(date=current_date, driver=fairest_driver)
                     slots_created += 1
@@ -273,3 +246,27 @@ def demote_from_admin(request, user_id):
         except User.DoesNotExist:
             pass
     return redirect('manage_users')
+
+@login_required
+def get_parents_list(request):
+    parents = ParentProfile.objects.filter(is_driver=True)
+    parent_data = [{'id': p.id, 'name': str(p)} for p in parents]
+    return JsonResponse(parent_data, safe=False)
+
+@staff_member_required
+def admin_assign_driver(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            date_str = data.get('date')
+            parent_id = data.get('parent_id')
+            date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            parent_profile = ParentProfile.objects.get(id=parent_id)
+            slot, created = DrivingSlot.objects.get_or_create(date=date_obj)
+            slot.driver = parent_profile
+            slot.is_swap_requested = False
+            slot.save()
+            return JsonResponse({'status': 'ok'})
+        except Exception as e:
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    return JsonResponse({'status': 'error'}, status=400)
