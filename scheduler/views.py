@@ -23,17 +23,14 @@ def signup_view(request):
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
-            # Робимо першого зареєстрованого користувача адміністратором
             if User.objects.count() == 1:
                 user.is_staff = True
                 user.is_superuser = True
                 user.save()
-            # Створюємо профіль з випадковим кольором
             ParentProfile.objects.create(user=user, color=get_random_color())
             login(request, user)
             return redirect('schedule')
     else:
-        # 👇 ПРОБЛЕМНИЙ РЯДОК ВИДАЛЕНО ЗВІДСИ 👇
         form = UserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
 
@@ -77,15 +74,52 @@ def toggle_holiday(request):
             data = json.loads(request.body)
             date_str = data.get('date')
             date_obj = datetime.datetime.strptime(date_str, '%Y-%m-%d').date()
+            
+            # Перевіряємо, чи існує вихідний, і видаляємо або створюємо його
             holiday, created = Holiday.objects.get_or_create(date=date_obj, defaults={'name': 'Вихідний'})
             if not created:
                 holiday.delete()
-                return JsonResponse({'status': 'deleted'})
+                status = 'deleted'
             else:
-                return JsonResponse({'status': 'created'})
+                status = 'created'
+
+            # --- 👇 ЛОГІКА ПЕРЕРАХУНКУ РОЗКЛАДУ 👇 ---
+            start_recalc_date = date_obj
+            today = datetime.date.today()
+            end_year = today.year
+            if today.month >= 9:
+                end_year += 1
+            end_recalc_date = datetime.date(end_year, 9, 1)
+            
+            # Видаляємо всі майбутні чергування, починаючи з дати вихідного
+            DrivingSlot.objects.filter(date__gte=start_recalc_date).delete()
+            
+            all_parents = list(ParentProfile.objects.filter(is_driver=True))
+            # Оновлюємо список свят
+            holidays = set(Holiday.objects.values_list('date', flat=True))
+            
+            current_date = start_recalc_date
+            while current_date < end_recalc_date:
+                # Перевіряємо, чи день є п'ятницею і не є вихідним
+                if current_date.weekday() == 4 and current_date not in holidays:
+                    unavailable_parents = Unavailability.objects.filter(start_date__lte=current_date, end_date__gte=current_date).values_list('parent_id', flat=True)
+                    available_parents = [p for p in all_parents if p.id not in unavailable_parents]
+                    
+                    if available_parents:
+                        parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(
+                            drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))
+                        ).order_by('drive_count', 'user__is_staff')
+                        fairest_driver = parent_counts[0]
+                        DrivingSlot.objects.create(date=current_date, driver=fairest_driver)
+
+                current_date += datetime.timedelta(days=1)
+            
+            return JsonResponse({'status': status, 'message': 'Графік оновлено'})
+
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     return JsonResponse({'status': 'error'}, status=400)
+
 
 @login_required
 def my_schedule_view(request):
@@ -173,7 +207,7 @@ def update_unavailability(request):
                             unavailable_parents = Unavailability.objects.filter(start_date__lte=current_date, end_date__gte=current_date).values_list('parent_id', flat=True)
                             available_parents = [p for p in all_parents if p.id not in unavailable_parents]
                             if available_parents:
-                                parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))).order_by('drive_count')
+                                parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))).order_by('drive_count', 'user__is_staff')
                                 fairest_driver = parent_counts[0]
                                 DrivingSlot.objects.create(date=current_date, driver=fairest_driver)
                         current_date += datetime.timedelta(days=1)
@@ -256,7 +290,7 @@ def recalculate_schedule_view(request):
                 if available_parents:
                     parent_counts = ParentProfile.objects.filter(id__in=[p.id for p in available_parents]).annotate(
                         drive_count=Count('drivingslot', filter=Q(drivingslot__date__lt=current_date))
-                    ).order_by('drive_count')
+                    ).order_by('drive_count', 'user__is_staff')
                     fairest_driver = parent_counts[0]
                     slot.driver = fairest_driver
                 else:
