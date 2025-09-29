@@ -1,3 +1,5 @@
+# scheduler/views.py
+
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponse
 from .models import DrivingSlot, ParentProfile, Unavailability, Holiday
@@ -21,16 +23,17 @@ def signup_view(request):
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
+            # Робимо першого зареєстрованого користувача адміністратором
             if User.objects.count() == 1:
                 user.is_staff = True
                 user.is_superuser = True
                 user.save()
+            # Створюємо профіль з випадковим кольором
             ParentProfile.objects.create(user=user, color=get_random_color())
             login(request, user)
             return redirect('schedule')
     else:
-        if User.objects.exists() and not request.user.is_staff:
-             return redirect('login')
+        # 👇 ПРОБЛЕМНИЙ РЯДОК ВИДАЛЕНО ЗВІДСИ 👇
         form = UserCreationForm()
     return render(request, 'registration/signup.html', {'form': form})
 
