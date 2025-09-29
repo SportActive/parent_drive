@@ -35,6 +35,12 @@
         }
         .nav-links a { color: #333; text-decoration: none; }
         .container { max-width: 900px; margin: 2em auto; padding: 1em 2em; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1, .legend, h2 { color: #333; }
+        #my-calendar { margin-top: 2em; }
+        .legend span { display: inline-block; width: 15px; height: 15px; margin-right: 5px; vertical-align: middle; }
+        .admin-actions { margin-top: 2em; padding-top: 1.5em; border-top: 1px solid #eee; }
+        .recalculate-btn { background-color: #17a2b8; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .recalculate-btn:hover { background-color: #138496; }
         .holiday-event { background-color: #dc3545 !important; border-color: #dc3545 !important; }
         #context-menu { position: absolute; background: white; border: 1px solid #ccc; box-shadow: 2px 2px 5px rgba(0,0,0,0.2); padding: 5px 0; min-width: 220px; z-index: 1000; display: none; border-radius: 5px; }
         #context-menu ul { list-style: none; padding: 0; margin: 0; }
@@ -65,7 +71,23 @@
     <div class="container">
         <h1>Мій графік</h1>
         <p>Клікніть на будь-який день або подію, щоб відкрити меню дій.</p>
+        
+        <div class="legend">
+             <span style="background-color: #28a745;"></span> Моє чергування &nbsp;
+             <span style="background-color: #007bff;"></span> Чуже чергування &nbsp;
+             <span style="background-color: #dc3545;"></span> Моя недоступність &nbsp;
+             <span style="background-color: #6c757d;"></span> Чужа недоступність / Заміна
+        </div>
+
         <div id='my-calendar' data-is-admin="{{ is_admin }}"></div>
+        
+        {% if user.is_staff %}
+        <div class="admin-actions">
+            <h2>Дії Адміністратора</h2>
+            <p>Ця дія видалить усі чергування, що починаються через 7 днів від сьогодні, і згенерує новий, справедливий графік до кінця навчального року.</p>
+            <button id="recalculate-btn" class="recalculate-btn">Перерахувати майбутній розклад</button>
+        </div>
+        {% endif %}
     </div>
 
     <div id="context-menu">
@@ -73,6 +95,7 @@
     </div>
 
     <script>
+        // Ваш JavaScript-код залишається без змін
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -121,7 +144,7 @@
                 height: 'auto',
                 initialView: 'dayGridMonth',
                 locale: 'uk',
-                firstDay: 1, // 👈 Ось ця зміна (1 = Понеділок)
+                firstDay: 1,
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth' },
                 events: "{% url 'unavailability_events' %}",
                 
@@ -178,6 +201,23 @@
                 }
             });
             calendar.render();
+
+            const recalcBtn = document.getElementById('recalculate-btn');
+            if (recalcBtn) {
+                recalcBtn.addEventListener('click', function() {
+                    if (confirm('Ви впевнені? Ця дія незворотна.')) {
+                        fetch("{% url 'recalculate_schedule' %}", {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': csrftoken }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            alert(data.message || 'Сталася помилка.');
+                            calendar.refetchEvents();
+                        });
+                    }
+                });
+            }
         });
     </script>
 </body>
