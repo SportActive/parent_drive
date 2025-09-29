@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
+from scheduler import views as scheduler_views  # <-- Ось рядок, який потрібно додати
 
 urlpatterns = [
     path('admin/', admin.site.urls),
