@@ -53,34 +53,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'parent_drive.wsgi.application'
 
-#DATABASES = {
-#   'default': dj_database_url.config(
-#      default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-#     conn_max_age=600
-#)
-
-##    'default': dj_database_url.parse('postgresql://postgres:gbThqFnCdAydFzFrAUUpPxPwTAOeVihP@postgres.railway.internal:5432/railway')
-#}
-
-# Пріоритет: DATABASE_PUBLIC_URL для локальної розробки, DATABASE_URL для Railway production
-#DATABASE_URL = os.environ.get('DATABASE_PUBLIC_URL') or os.environ.get('DATABASE_URL')
-
-#DATABASES = {
-#    'default': dj_database_url.parse(
-#        DATABASE_URL or f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-#        conn_max_age=600
-#    )
-#}
-
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('PGDATABASE', 'railway'),
-        'USER': os.environ.get('PGUSER', 'postgres'),
-        'PASSWORD': os.environ.get('PGPASSWORD', 'gbThqFnCdAydFzFrAUUpPxPwTAOeVihP'),
-        'HOST': os.environ.get('PGHOST', 'postgres.railway.internal'),
-        'PORT': os.environ.get('PGPORT', '5432'),
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600
+    )
 }
 
 AUTH_PASSWORD_VALIDATORS = []

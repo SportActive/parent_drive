@@ -1,41 +1,71 @@
 <!DOCTYPE html>
 <html lang='uk'>
-  <head>
+<head>
     <meta charset='utf-8' />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Розклад поїздок</title>
     <style>
-        body { font-family: sans-serif; margin: 0; }
-        #calendar { max-width: 900px; margin: 20px auto; }
-        .user-nav { background-color: #f8f9fa; padding: 10px 20px; text-align: right; border-bottom: 1px solid #ddd; display: flex; justify-content: flex-end; align-items: center; gap: 15px;}
+        body { font-family: sans-serif; margin: 0; background-color: #f8f9fa; }
+        .header {
+            background: #fff;
+            padding: 10px 20px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .logo a {
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            color: #333;
+            text-decoration: none;
+            font-size: 20px;
+        }
+        .logo img {
+            height: 40px;
+            margin-right: 10px;
+        }
+        .user-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .user-nav a, .user-nav span { color: #333; text-decoration: none; }
         .user-nav form { margin: 0; }
         .user-nav button { background: none; border: none; color: #007bff; text-decoration: underline; cursor: pointer; font-size: 1em; padding: 0; }
+        #calendar { max-width: 900px; margin: 20px auto; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .my-drive-event, .swap-request-event, .other-drive-event, .unassigned-event, .holiday-event { cursor: pointer; }
-        .my-drive-event { background-color: #28a745; border-color: #28a745; }
-        .other-drive-event { background-color: #007bff; border-color: #007bff; }
-        .unassigned-event { background-color: #ffc107; border-color: #ffc107; color: black; }
-        .swap-request-event { background-color: #6c757d; border-color: #6c757d; }
-        .holiday-event { background-color: #fd7e14; border-color: #fd7e14; }
     </style>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
-  </head>
-  <body>
-    <div class="user-nav">
-        {% if user.is_authenticated %}
-            <span>Вітаємо, **{{ user.username }}**!</span>
-            <a href="{% url 'my_schedule' %}">Мій кабінет</a>
-            <form action="{% url 'logout' %}" method="post">
-                {% csrf_token %}
-                <button type="submit">Вийти</button>
-            </form>
-        {% else %}
-            <a href="{% url 'login' %}">Увійти</a>
-        {% endif %}
-    </div>
+</head>
+<body>
+    {% load static %}
+    <header class="header">
+        <div class="logo">
+            <a href="{% url 'schedule' %}">
+                <img src="{% static 'scheduler/logo.png' %}" alt="Логотип KinderRides">
+                KinderRides
+            </a>
+        </div>
+        <div class="user-nav">
+            {% if user.is_authenticated %}
+                <span>Вітаємо, <strong>{{ user.username }}</strong>!</span>
+                <a href="{% url 'my_schedule' %}">Мій кабінет</a>
+                <form action="{% url 'logout' %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit">Вийти</button>
+                </form>
+            {% else %}
+                <a href="{% url 'login' %}">Увійти</a>
+            {% endif %}
+        </div>
+    </header>
 
     <div id='calendar'></div>
 
     <script>
+        // Ваш JavaScript-код залишається без змін
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -86,5 +116,5 @@
             calendar.render();
         });
     </script>
-  </body>
+</body>
 </html>
