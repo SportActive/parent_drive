@@ -72,13 +72,14 @@ WSGI_APPLICATION = 'parent_drive.wsgi.application'
 #    )
 #}
 
-if 'DATABASE_URL' in os.environ:
-    # Production settings for Railway
+DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('DATABASE_PUBLIC_URL')
+
+if DATABASE_URL:
     DATABASES = {
-        'default': dj_database_url.config(conn_max_age=600, ssl_require=True)
+        'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600)
     }
 else:
-    # Development settings for local work
+    # Fallback для локальної розробки без Railway
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
