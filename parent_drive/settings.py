@@ -62,6 +62,15 @@ DATABASES = {
 #    'default': dj_database_url.parse('postgresql://postgres:gbThqFnCdAydFzFrAUUpPxPwTAOeVihP@postgres.railway.internal:5432/railway')
 }
 
+# Пріоритет: DATABASE_PUBLIC_URL для локальної розробки, DATABASE_URL для Railway production
+#DATABASE_URL = os.environ.get('DATABASE_PUBLIC_URL') or os.environ.get('DATABASE_URL')
+
+#DATABASES = {
+#    'default': dj_database_url.parse(
+#        DATABASE_URL or f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+#        conn_max_age=600
+#    )
+#}
 
 
 AUTH_PASSWORD_VALIDATORS = []
