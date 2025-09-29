@@ -37,20 +37,11 @@
         .user-nav form { margin: 0; }
         .user-nav button { background: none; border: none; color: #007bff; text-decoration: underline; cursor: pointer; font-size: 1em; padding: 0; }
         #calendar { max-width: 900px; margin: 20px auto; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        
-        /* --- Стилі подій --- */
-        .my-drive-event, .swap-request-event, .other-drive-event, .unassigned-event, .holiday-event { cursor: pointer; }
-        .my-drive-event { background-color: #28a745; border-color: #28a745; }
-        .other-drive-event { background-color: #007bff; border-color: #007bff; }
-        .unassigned-event { background-color: #ffc107; border-color: #ffc107; color: black; }
-        .swap-request-event { background-color: #6c757d; border-color: #6c757d; }
-        /* 👇 Ось зміна для вихідних 👇 */
         .holiday-event { background-color: #dc3545; border-color: #dc3545; }
     </style>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js'></script>
 </head>
 <body>
-    {% load static %}
     <header class="header">
         <div class="logo">
             <a href="{% url 'schedule' %}">
@@ -75,7 +66,6 @@
     <div id='calendar'></div>
 
     <script>
-        // Ваш JavaScript-код залишається без змін
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -99,6 +89,7 @@
                 height: 'auto',
                 initialView: 'dayGridMonth',
                 locale: 'uk',
+                firstDay: 1, // 👈 Ось ця зміна (1 = Понеділок)
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,listWeek' },
                 events: "{% url 'schedule_events' %}",
                 
