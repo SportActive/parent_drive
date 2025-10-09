@@ -95,8 +95,8 @@
     </div>
 
     <script>
-        // Ваш JavaScript-код залишається без змін
         function getCookie(name) {
+            // ... (цей код без змін)
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
                 const cookies = document.cookie.split(';');
@@ -120,7 +120,9 @@
             const contextMenu = document.getElementById('context-menu');
             const menuItems = document.getElementById('context-menu-items');
 
-            function showContextMenu(x, y, items) {
+            // --- 👇 ОНОВЛЕНА ФУНКЦІЯ 👇 ---
+            // Тепер вона приймає HTML-елемент, а не координати
+            function showContextMenu(targetElement, items) {
                 if (items.length === 0) return;
                 menuItems.innerHTML = '';
                 items.forEach(item => {
@@ -133,9 +135,30 @@
                     });
                     menuItems.appendChild(li);
                 });
-                contextMenu.style.left = x + 'px';
-                contextMenu.style.top = y + 'px';
+
+                // Показуємо меню, щоб отримати його реальні розміри
                 contextMenu.style.display = 'block';
+                
+                const rect = targetElement.getBoundingClientRect();
+                const menuWidth = contextMenu.offsetWidth;
+                const menuHeight = contextMenu.offsetHeight;
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+
+                // Розраховуємо позицію під елементом
+                let top = rect.bottom + window.scrollY;
+                let left = rect.left + window.scrollX;
+
+                // Коригуємо позицію, якщо меню виходить за межі екрана
+                if (left + menuWidth > viewportWidth) {
+                    left = rect.right + window.scrollX - menuWidth;
+                }
+                if (top + menuHeight > viewportHeight + window.scrollY) {
+                    top = rect.top + window.scrollY - menuHeight;
+                }
+
+                contextMenu.style.left = left + 'px';
+                contextMenu.style.top = top + 'px';
             }
 
             window.addEventListener('click', () => contextMenu.style.display = 'none');
@@ -148,6 +171,7 @@
                 headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth' },
                 events: "{% url 'unavailability_events' %}",
                 
+                // --- 👇 ОНОВЛЕНА ФУНКЦІЯ dateClick 👇 ---
                 dateClick: function(info) {
                     info.jsEvent.stopPropagation();
                     contextMenu.style.display = 'none';
@@ -174,9 +198,11 @@
                                 });
                         }});
                     }
-                    showContextMenu(info.jsEvent.pageX, info.jsEvent.pageY, items);
+                    // Передаємо сам елемент дня, а не координати
+                    showContextMenu(info.dayEl, items);
                 },
                 
+                // --- 👇 ОНОВЛЕНА ФУНКЦІЯ eventClick 👇 ---
                 eventClick: function(info) {
                     info.jsEvent.stopPropagation();
                     contextMenu.style.display = 'none';
@@ -197,13 +223,15 @@
                         }});
                     }
                     
-                    showContextMenu(info.jsEvent.pageX, info.jsEvent.pageY, items);
+                    // Передаємо елемент події, а не координати
+                    showContextMenu(info.el, items);
                 }
             });
             calendar.render();
 
             const recalcBtn = document.getElementById('recalculate-btn');
             if (recalcBtn) {
+                // ... (цей код без змін)
                 recalcBtn.addEventListener('click', function() {
                     if (confirm('Ви впевнені? Ця дія незворотна.')) {
                         fetch("{% url 'recalculate_schedule' %}", {
